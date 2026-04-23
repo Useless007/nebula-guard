@@ -1,0 +1,5 @@
+# .gitignore
+.env
+data/
+dashboard/node_modules/
+dashboard/.next/

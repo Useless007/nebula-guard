@@ -1,0 +1,94 @@
+services:
+  # --- AI Engine (Ollama) ---
+  ollama:
+    image: ollama/ollama:latest
+    container_name: nebula-ai
+    restart: always
+    volumes:
+      - ./data/ollama:/root/.ollama
+    # ถ้าไม่มี GPU ให้ comment ข้างล่างนี้ไว้
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+  
+  # --- Service ช่วยโหลด Model ---
+  ollama-pull:
+    image: curlimages/curl:latest
+    container_name: nebula-ai-pull
+    depends_on:
+      - ollama
+    # ใช้ตัวแปร ${AI_MODEL} เพื่อความยืดหยุ่น
+    entrypoint: [ "sh", "-c", "sleep 5 && curl http://ollama:11434/api/pull -d '{\"name\": \"${AI_MODEL}\"}'" ]
+  
+  # --- Security Source (Honeypot) ---  
+  cowrie:
+      image: cowrie/cowrie:latest
+      container_name: cowrie
+      restart: always
+      ports:
+        - "2222:2222"
+      deploy:
+        resources:
+          limits:
+            cpus: '0.50'
+            memory: 512M
+      cap_drop:
+        - ALL
+      security_opt:
+        - no-new-privileges:true
+
+  # --- Data Persistence (PostgreSQL) ---
+  db:
+    image: postgres:15-alpine
+    container_name: nebula-db
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./data/postgres_data:/var/lib/postgresql/data
+
+  # --- Intelligence Agent (Go Backend) ---
+  app:
+    build: ./app
+    container_name: nebula-app
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - db
+      - cowrie
+      - ollama
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - OLLAMA_HOST=http://ollama:11434
+      - AI_MODEL=${AI_MODEL}
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+
+  # --- Visualization (Dashboard) ---
+  dashboard:
+      build: ./dashboard
+      container_name: nebula-dashboard
+      restart: always
+      ports:
+        - "3000:3000"
+      environment:
+        - DB_HOST=db
+        - DB_PORT=5432
+        - DB_USER=${DB_USER}
+        - DB_PASSWORD=${DB_PASSWORD}
+        - DB_NAME=${DB_NAME}
+      depends_on:
+        - db
