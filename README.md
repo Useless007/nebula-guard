@@ -40,6 +40,7 @@ graph LR
 
 ### 📱 Instant Telegram Alerts
 ![NebulaGuard Telegram Notification](docs/telegram-preview.png)
+
 *AI-Powered forensic reports sent directly to your mobile device upon critical incidents.*
 
 ### 🛰️ Live Demonstration
